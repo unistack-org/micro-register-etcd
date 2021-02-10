@@ -28,7 +28,7 @@ require (
 	github.com/unistack-org/micro/v3 v3.0.2-0.20201129143054-8d6eb34aeeac
 	github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2 // indirect
 	go.etcd.io/bbolt v1.3.5 // indirect
-	go.uber.org/zap v1.15.0
+	go.uber.org/zap v1.16.0
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0 // indirect
 	sigs.k8s.io/yaml v1.2.0 // indirect
 )
