@@ -3,8 +3,8 @@ package etcd
 import (
 	"context"
 
-	"github.com/unistack-org/micro/v3/registry"
 	"go.uber.org/zap"
+	"go.unistack.org/micro/v3/register"
 )
 
 type authKey struct{}
@@ -17,8 +17,8 @@ type authCreds struct {
 }
 
 // Auth allows you to specify username/password
-func Auth(username, password string) registry.Option {
-	return func(o *registry.Options) {
+func Auth(username, password string) register.Option {
+	return func(o *register.Options) {
 		if o.Context == nil {
 			o.Context = context.Background()
 		}
@@ -27,8 +27,8 @@ func Auth(username, password string) registry.Option {
 }
 
 // LogConfig allows you to set etcd log config
-func LogConfig(config *zap.Config) registry.Option {
-	return func(o *registry.Options) {
+func LogConfig(config *zap.Config) register.Option {
+	return func(o *register.Options) {
 		if o.Context == nil {
 			o.Context = context.Background()
 		}

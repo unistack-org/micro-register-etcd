@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coreos/etcd/clientv3"
-	"github.com/unistack-org/micro/v3/registry"
+	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.unistack.org/micro/v3/register"
 )
 
 type etcdWatcher struct {
@@ -20,8 +20,8 @@ type etcdWatcher struct {
 	cancel func()
 }
 
-func newEtcdWatcher(c *clientv3.Client, timeout time.Duration, opts ...registry.WatchOption) (registry.Watcher, error) {
-	var wo registry.WatchOptions
+func newEtcdWatcher(c *clientv3.Client, timeout time.Duration, opts ...register.WatchOption) (register.Watcher, error) {
+	var wo register.WatchOptions
 	for _, o := range opts {
 		o(&wo)
 	}
@@ -30,7 +30,7 @@ func newEtcdWatcher(c *clientv3.Client, timeout time.Duration, opts ...registry.
 	}
 
 	watchPath := prefix
-	if wo.Domain == registry.WildcardDomain {
+	if wo.Domain == register.WildcardDomain {
 		if len(wo.Service) > 0 {
 			return nil, errors.New("Cannot watch a service across domains")
 		}
@@ -52,7 +52,7 @@ func newEtcdWatcher(c *clientv3.Client, timeout time.Duration, opts ...registry.
 	}, nil
 }
 
-func (ew *etcdWatcher) Next() (*registry.Result, error) {
+func (ew *etcdWatcher) Next() (*register.Result, error) {
 	for wresp := range ew.w {
 		if wresp.Err() != nil {
 			return nil, wresp.Err()
@@ -81,7 +81,7 @@ func (ew *etcdWatcher) Next() (*registry.Result, error) {
 			if service == nil {
 				continue
 			}
-			return &registry.Result{
+			return &register.Result{
 				Action:  action,
 				Service: service,
 			}, nil
