@@ -21,20 +21,14 @@ type etcdWatcher struct {
 }
 
 func newEtcdWatcher(c *clientv3.Client, timeout time.Duration, opts ...register.WatchOption) (register.Watcher, error) {
-	var wo register.WatchOptions
-	for _, o := range opts {
-		o(&wo)
-	}
-	if len(wo.Domain) == 0 {
-		wo.Domain = defaultDomain
-	}
+	wo := register.NewWatchOptions(opts...)
 
-	watchPath := prefix
+	watchPath := DefaultPrefix
 	if wo.Domain == register.WildcardDomain {
 		if len(wo.Service) > 0 {
 			return nil, errors.New("Cannot watch a service across domains")
 		}
-		watchPath = prefix
+		watchPath = DefaultPrefix
 	} else if len(wo.Service) > 0 {
 		watchPath = servicePath(wo.Domain, wo.Service) + "/"
 	}

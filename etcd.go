@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	Defaultprefix = "/micro/register/"
+	DefaultPrefix = "/micro/register/"
 	DefaultDomain = "micro"
 )
 
@@ -200,7 +200,7 @@ func serializeServiceName(s string) string {
 }
 
 func prefixWithDomain(domain string) string {
-	return path.Join(prefix, domain)
+	return path.Join(DefaultPrefix, domain)
 }
 
 func (e *etcdRegister) Init(opts ...register.Option) error {
@@ -227,13 +227,7 @@ func (e *etcdRegister) registerNode(s *register.Service, node *register.Node, op
 	}
 
 	// parse the options
-	var options register.RegisterOptions
-	for _, o := range opts {
-		o(&options)
-	}
-	if len(options.Domain) == 0 {
-		options.Domain = defaultDomain
-	}
+	options := register.NewRegisterOptions(opts...)
 
 	if s.Metadata == nil {
 		s.Metadata = map[string]string{}
@@ -402,13 +396,7 @@ func (e *etcdRegister) Deregister(ctx context.Context, s *register.Service, opts
 	}
 
 	// parse the options
-	var options register.DeregisterOptions
-	for _, o := range opts {
-		o(&options)
-	}
-	if len(options.Domain) == 0 {
-		options.Domain = defaultDomain
-	}
+	options := register.NewDeregisterOptions(opts...)
 
 	for _, node := range s.Nodes {
 		e.Lock()
@@ -465,19 +453,13 @@ func (e *etcdRegister) LookupService(ctx context.Context, name string, opts ...r
 	defer cancel()
 
 	// parse the options and fallback to the default domain
-	var options register.LookupOptions
-	for _, o := range opts {
-		o(&options)
-	}
-	if len(options.Domain) == 0 {
-		options.Domain = defaultDomain
-	}
+	options := register.NewLookupOptions(opts...)
 
 	var results []*mvccpb.KeyValue
 
 	// TODO: refactorout wildcard, this is an incredibly expensive operation
 	if options.Domain == register.WildcardDomain {
-		rsp, err := e.client.Get(ctx, prefix, clientv3.WithPrefix(), clientv3.WithSerializable())
+		rsp, err := e.client.Get(ctx, DefaultPrefix, clientv3.WithPrefix(), clientv3.WithSerializable())
 		if err != nil {
 			return nil, err
 		}
@@ -485,7 +467,7 @@ func (e *etcdRegister) LookupService(ctx context.Context, name string, opts ...r
 		// filter the results for the key we care about
 		for _, kv := range rsp.Kvs {
 			// if the key does not contain the name then pass
-			_, service, ok := getName(string(kv.Key), prefix)
+			_, service, ok := getName(string(kv.Key), DefaultPrefix)
 			if !ok || service != name {
 				continue
 			}
@@ -510,7 +492,7 @@ func (e *etcdRegister) LookupService(ctx context.Context, name string, opts ...r
 
 	for _, n := range results {
 		// only process the things we care about
-		domain, service, ok := getName(string(n.Key), prefix)
+		domain, service, ok := getName(string(n.Key), DefaultPrefix)
 		if !ok || service != name {
 			continue
 		}
@@ -545,22 +527,19 @@ func (e *etcdRegister) LookupService(ctx context.Context, name string, opts ...r
 func (e *etcdRegister) ListServices(ctx context.Context, opts ...register.ListOption) ([]*register.Service, error) {
 	// parse the options
 	options := register.NewListOptions(opts...)
-	if len(options.Domain) == 0 {
-		options.Domain = defaultDomain
-	}
 
 	// determine the prefix
 	var p string
 	if options.Domain == register.WildcardDomain {
-		p = prefix
+		p = DefaultPrefix
 	} else {
 		p = prefixWithDomain(options.Domain)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), e.options.Timeout)
+	nctx, cancel := context.WithTimeout(context.Background(), e.options.Timeout)
 	defer cancel()
 
-	rsp, err := e.client.Get(ctx, p, clientv3.WithPrefix(), clientv3.WithSerializable())
+	rsp, err := e.client.Get(nctx, p, clientv3.WithPrefix(), clientv3.WithSerializable())
 	if err != nil {
 		return nil, err
 	}
@@ -570,7 +549,7 @@ func (e *etcdRegister) ListServices(ctx context.Context, opts ...register.ListOp
 
 	versions := make(map[string]*register.Service)
 	for _, n := range rsp.Kvs {
-		domain, service, ok := getName(string(n.Key), prefix)
+		domain, service, ok := getName(string(n.Key), DefaultPrefix)
 		if !ok {
 			continue
 		}
