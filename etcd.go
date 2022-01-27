@@ -23,13 +23,11 @@ import (
 )
 
 const (
-	prefix        = "/micro/register/"
-	defaultDomain = "micro"
+	Defaultprefix = "/micro/register/"
+	DefaultDomain = "micro"
 )
 
-var (
-	_ register.Register = &etcdRegister{}
-)
+var _ register.Register = &etcdRegister{}
 
 type etcdRegister struct {
 	client  *clientv3.Client
@@ -41,8 +39,10 @@ type etcdRegister struct {
 	leases map[string]leases
 }
 
-type reg map[string]uint64
-type leases map[string]clientv3.LeaseID
+type (
+	reg    map[string]uint64
+	leases map[string]clientv3.LeaseID
+)
 
 // NewRegister returns an initialized etcd register
 func NewRegister(opts ...register.Option) *etcdRegister {
