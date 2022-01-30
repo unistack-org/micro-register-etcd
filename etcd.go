@@ -22,10 +22,7 @@ import (
 	"go.unistack.org/micro/v3/register"
 )
 
-const (
-	DefaultPrefix = "/micro/register/"
-	DefaultDomain = "micro"
-)
+var DefaultPrefix = "/micro/register/"
 
 var _ register.Register = &etcdRegister{}
 
