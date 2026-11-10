@@ -3,6 +3,7 @@ package etcd
 
 import (
 	"context"
+	"fmt"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -226,28 +227,20 @@ func (e *etcdRegister) registerNode(s *register.Service, node *register.Node, op
 	// parse the options
 	options := register.NewRegisterOptions(opts...)
 
-	if s.Metadata == nil {
-		s.Metadata = map[string]string{}
-	}
-	if node.Metadata == nil {
-		node.Metadata = map[string]string{}
-	}
-
-	// set the domain in metadata so it can be retrieved by wildcard queries
-	s.Metadata["domain"] = options.Domain
-	node.Metadata["domain"] = options.Domain
+	// set the namespace so it can be retrieved by wildcard queries
+	s.Namespace = options.Namespace
 
 	e.Lock()
 	// ensure the leases and registers are setup for this domain
-	if _, ok := e.leases[options.Domain]; !ok {
-		e.leases[options.Domain] = make(leases)
+	if _, ok := e.leases[options.Namespace]; !ok {
+		e.leases[options.Namespace] = make(leases)
 	}
-	if _, ok := e.reg[options.Domain]; !ok {
-		e.reg[options.Domain] = make(reg)
+	if _, ok := e.reg[options.Namespace]; !ok {
+		e.reg[options.Namespace] = make(reg)
 	}
 
 	// check to see if we already have a lease cached
-	leaseID, ok := e.leases[options.Domain][s.Name+node.ID]
+	leaseID, ok := e.leases[options.Namespace][s.Name+node.ID]
 	e.Unlock()
 
 	if !ok {
@@ -256,7 +249,7 @@ func (e *etcdRegister) registerNode(s *register.Service, node *register.Node, op
 		defer cancel()
 
 		// look for the existing key
-		key := nodePath(options.Domain, s.Name, node.ID)
+		key := nodePath(options.Namespace, s.Name, node.ID)
 		rsp, err := e.client.Get(ctx, key, clientv3.WithSerializable())
 		if err != nil {
 			return err
@@ -281,8 +274,8 @@ func (e *etcdRegister) registerNode(s *register.Service, node *register.Node, op
 
 				// save the info
 				e.Lock()
-				e.leases[options.Domain][s.Name+node.ID] = leaseID
-				e.reg[options.Domain][s.Name+node.ID] = h
+				e.leases[options.Namespace][s.Name+node.ID] = leaseID
+				e.reg[options.Namespace][s.Name+node.ID] = h
 				e.Unlock()
 
 				break
@@ -294,8 +287,8 @@ func (e *etcdRegister) registerNode(s *register.Service, node *register.Node, op
 
 	// renew the lease if it exists
 	if leaseID > 0 {
-		if logger.V(logger.TraceLevel) {
-			logger.Tracef(e.options.Context, "Renewing existing lease for %s %d", s.Name, leaseID)
+		if e.options.Logger.V(logger.TraceLevel) {
+			e.options.Logger.Trace(e.options.Context, fmt.Sprintf("Renewing existing lease for %s %d", s.Name, leaseID))
 		}
 
 		if _, err := e.client.KeepAliveOnce(context.TODO(), leaseID); err != nil {
@@ -303,8 +296,8 @@ func (e *etcdRegister) registerNode(s *register.Service, node *register.Node, op
 				return err
 			}
 
-			if logger.V(logger.TraceLevel) {
-				logger.Tracef(e.options.Context, "Lease not found for %s %d", s.Name, leaseID)
+			if e.options.Logger.V(logger.TraceLevel) {
+				e.options.Logger.Trace(e.options.Context, fmt.Sprintf("Lease not found for %s %d", s.Name, leaseID))
 			}
 
 			// lease not found do register
@@ -320,29 +313,24 @@ func (e *etcdRegister) registerNode(s *register.Service, node *register.Node, op
 
 	// get existing hash for the service node
 	e.RLock()
-	v, ok := e.reg[options.Domain][s.Name+node.ID]
+	v, ok := e.reg[options.Namespace][s.Name+node.ID]
 	e.RUnlock()
 
 	// the service is unchanged, skip registering
 	if ok && v == h && !leaseNotFound {
-		if logger.V(logger.TraceLevel) {
-			logger.Tracef(e.options.Context, "Service %s node %s unchanged skipping registration", s.Name, node.ID)
+		if e.options.Logger.V(logger.TraceLevel) {
+			e.options.Logger.Trace(e.options.Context, fmt.Sprintf("Service %s node %s unchanged skipping registration", s.Name, node.ID))
 		}
 		return nil
 	}
 
-	// add domain to the service metadata so it can be determined when doing wildcard queries
-	if s.Metadata == nil {
-		s.Metadata = map[string]string{"domain": options.Domain}
-	} else {
-		s.Metadata["domain"] = options.Domain
-	}
+	// add the namespace so it can be determined when doing wildcard queries
+	s.Namespace = options.Namespace
 
 	service := &register.Service{
 		Name:      s.Name,
 		Version:   s.Version,
-		Metadata:  s.Metadata,
-		Endpoints: s.Endpoints,
+		Namespace: s.Namespace,
 		Nodes:     []*register.Node{node},
 	}
 
@@ -363,24 +351,24 @@ func (e *etcdRegister) registerNode(s *register.Service, node *register.Node, op
 	if lgr != nil {
 		putOpts = append(putOpts, clientv3.WithLease(lgr.ID))
 
-		if logger.V(logger.TraceLevel) {
-			logger.Tracef(e.options.Context, "Registering %s id %s with lease %v and leaseID %v and ttl %v", service.Name, node.ID, lgr, lgr.ID, options.TTL)
+		if e.options.Logger.V(logger.TraceLevel) {
+			e.options.Logger.Trace(e.options.Context, fmt.Sprintf("Registering %s id %s with lease %v and leaseID %v and ttl %v", service.Name, node.ID, lgr, lgr.ID, options.TTL))
 		}
-	} else if logger.V(logger.TraceLevel) {
-		logger.Tracef(e.options.Context, "Registering %s id %s without lease", service.Name, node.ID)
+	} else if e.options.Logger.V(logger.TraceLevel) {
+		e.options.Logger.Trace(e.options.Context, fmt.Sprintf("Registering %s id %s without lease", service.Name, node.ID))
 	}
 
-	key := nodePath(options.Domain, s.Name, node.ID)
+	key := nodePath(options.Namespace, s.Name, node.ID)
 	if _, err = e.client.Put(ctx, key, encode(service), putOpts...); err != nil {
 		return err
 	}
 
 	e.Lock()
 	// save our hash of the service
-	e.reg[options.Domain][s.Name+node.ID] = h
+	e.reg[options.Namespace][s.Name+node.ID] = h
 	// save our leaseID of the service
 	if lgr != nil {
-		e.leases[options.Domain][s.Name+node.ID] = lgr.ID
+		e.leases[options.Namespace][s.Name+node.ID] = lgr.ID
 	}
 	e.Unlock()
 
@@ -398,28 +386,28 @@ func (e *etcdRegister) Deregister(ctx context.Context, s *register.Service, opts
 	for _, node := range s.Nodes {
 		e.Lock()
 		// delete our hash of the service
-		nodes, ok := e.reg[options.Domain]
+		nodes, ok := e.reg[options.Namespace]
 		if ok {
 			delete(nodes, s.Name+node.ID)
-			e.reg[options.Domain] = nodes
+			e.reg[options.Namespace] = nodes
 		}
 
 		// delete our lease of the service
-		leases, ok := e.leases[options.Domain]
+		leases, ok := e.leases[options.Namespace]
 		if ok {
 			delete(leases, s.Name+node.ID)
-			e.leases[options.Domain] = leases
+			e.leases[options.Namespace] = leases
 		}
 		e.Unlock()
 
 		ctx, cancel := context.WithTimeout(context.Background(), e.options.Timeout)
 		defer cancel()
 
-		if logger.V(logger.TraceLevel) {
-			logger.Tracef(e.options.Context, "Deregistering %s id %s", s.Name, node.ID)
+		if e.options.Logger.V(logger.TraceLevel) {
+			e.options.Logger.Trace(e.options.Context, fmt.Sprintf("Deregistering %s id %s", s.Name, node.ID))
 		}
 
-		if _, err := e.client.Delete(ctx, nodePath(options.Domain, s.Name, node.ID)); err != nil {
+		if _, err := e.client.Delete(ctx, nodePath(options.Namespace, s.Name, node.ID)); err != nil {
 			return err
 		}
 	}
@@ -455,7 +443,7 @@ func (e *etcdRegister) LookupService(ctx context.Context, name string, opts ...r
 	var results []*mvccpb.KeyValue
 
 	// TODO: refactorout wildcard, this is an incredibly expensive operation
-	if options.Domain == register.WildcardDomain {
+	if options.Namespace == register.WildcardNamespace {
 		rsp, err := e.client.Get(ctx, DefaultPrefix, clientv3.WithPrefix(), clientv3.WithSerializable())
 		if err != nil {
 			return nil, err
@@ -473,7 +461,7 @@ func (e *etcdRegister) LookupService(ctx context.Context, name string, opts ...r
 			results = append(results, kv)
 		}
 	} else {
-		prefix := servicePath(options.Domain, name) + "/"
+		prefix := servicePath(options.Namespace, name) + "/"
 		rsp, err := e.client.Get(ctx, prefix, clientv3.WithPrefix(), clientv3.WithSerializable())
 		if err != nil {
 			return nil, err
@@ -503,8 +491,7 @@ func (e *etcdRegister) LookupService(ctx context.Context, name string, opts ...r
 				s = &register.Service{
 					Name:      sn.Name,
 					Version:   sn.Version,
-					Metadata:  sn.Metadata,
-					Endpoints: sn.Endpoints,
+					Namespace: sn.Namespace,
 				}
 				versions[key] = s
 			}
@@ -527,10 +514,10 @@ func (e *etcdRegister) ListServices(ctx context.Context, opts ...register.ListOp
 
 	// determine the prefix
 	var p string
-	if options.Domain == register.WildcardDomain {
+	if options.Namespace == register.WildcardNamespace {
 		p = DefaultPrefix
 	} else {
-		p = prefixWithDomain(options.Domain)
+		p = prefixWithDomain(options.Namespace)
 	}
 
 	nctx, cancel := context.WithTimeout(context.Background(), e.options.Timeout)

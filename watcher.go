@@ -24,13 +24,13 @@ func newEtcdWatcher(c *clientv3.Client, timeout time.Duration, opts ...register.
 	wo := register.NewWatchOptions(opts...)
 
 	watchPath := DefaultPrefix
-	if wo.Domain == register.WildcardDomain {
+	if wo.Namespace == register.WildcardNamespace {
 		if len(wo.Service) > 0 {
-			return nil, errors.New("Cannot watch a service across domains")
+			return nil, errors.New("Cannot watch a service across namespaces")
 		}
 		watchPath = DefaultPrefix
 	} else if len(wo.Service) > 0 {
-		watchPath = servicePath(wo.Domain, wo.Service) + "/"
+		watchPath = servicePath(wo.Namespace, wo.Service) + "/"
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -56,17 +56,17 @@ func (ew *etcdWatcher) Next() (*register.Result, error) {
 		}
 		for _, ev := range wresp.Events {
 			service := decode(ev.Kv.Value)
-			var action string
+			var action register.EventType
 
 			switch ev.Type {
 			case clientv3.EventTypePut:
 				if ev.IsCreate() {
-					action = "create"
+					action = register.EventCreate
 				} else if ev.IsModify() {
-					action = "update"
+					action = register.EventUpdate
 				}
 			case clientv3.EventTypeDelete:
-				action = "delete"
+				action = register.EventDelete
 
 				// get service from prevKv
 				service = decode(ev.PrevKv.Value)
