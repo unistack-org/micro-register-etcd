@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/mitchellh/hashstructure v1.1.0
-	go.etcd.io/etcd/api/v3 v3.7.3
+	go.etcd.io/etcd/api/v3 v3.7.4
 	go.etcd.io/etcd/client/v3 v3.7.3
 	go.uber.org/zap v1.28.0
 	go.unistack.org/micro/v3 v3.11.51
@@ -21,7 +21,7 @@ require (
 	go.etcd.io/etcd/client/pkg/v3 v3.7.3 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.unistack.org/micro-proto/v3 v3.4.1 // indirect
-	golang.org/x/net v0.61.0 // indirect
+	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260803160001-6ac0973c030d // indirect
